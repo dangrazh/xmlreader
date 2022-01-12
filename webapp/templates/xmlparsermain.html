@@ -1,0 +1,161 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="content-section">
+    <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <fieldset class="form-group">
+            <legend class="border-bottom mb-4">XML Parser</legend>
+            <div class="form-group mb-3">
+                <div class="row">
+                    <div class="col-md-6 flex-grow-1">
+                        <div class="content-section">
+                            {{ form.attributehandling.label() }} <br>
+
+                            {% for subfield in form.attributehandling %}
+                            <tr>
+                                <td>{{ subfield }}</td>
+                                <td>{{ subfield.label }}</td>
+                                <td>&nbsp;&nbsp;&nbsp;</td>
+                            </tr>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-3 flex-grow-1">
+                        <div class="content-section-narrow">
+                            <div class="form-group">
+                                {{form.toplevel.label(class="form-control-label form-control-label-sm")}}
+                                {{form.toplevel(class="form-control form-control-sm")}}
+                                {% if form.toplevel.errors %}
+                                {% for error in form.toplevel.errors %}
+                                <span class="text-danger">{{ error }}</span></br>
+                                {% endfor %}
+                                {% endif %}
+                            </div>
+                            <div class="form-group">
+                                {{form.typedistance.label(class="form-control-label form-control-label-sm")}}
+                                {{form.typedistance(class="form-control form-control-label-sm")}}
+                                {% if form.typedistance.errors %}
+                                {% for error in form.typedistance.errors %}
+                                <span class="text-danger">{{ error }}</span></br>
+                                {% endfor %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6 flex-grow-1">
+                        {{ form.inspectfile(class="btn btn-outline-info") }}
+                    </div>
+                </div>
+                <div class="row" style="min-height: 400px;">
+                    <div class="col-md-12 flex-grow-1">
+                        {% if fp.file_processed %}
+                        <div class="text-left">Preview of message(s):</div>
+                        <!-- the document type level tabs -->
+                        <ul class="nav nav-tabs">
+                            <li class="nav-item">
+                                <a href="#usage" class="nav-link active" data-toggle="tab">Usage</a>
+                            </li>
+                            {% for sample in samples %}
+                            <li class="nav-item">
+                                <a href="#{{ sample }}" class="nav-link" data-toggle="tab">{{ sample }}</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <!-- the 1st level tabs -->
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="usage">
+                                <h4 class="mt-2">Usage instructions</h4>
+                                <p>This function allows you to change attribute usage settings and to run the actual xml
+                                    parsing iteratively until you are happy with the output produced. Each xml document
+                                    type identified in the input file will produce one datatab on this page with the
+                                    first document being displayed. Once you run the actualExcel export, all documents
+                                    of the same type will be exported to a separate tab per document type in the Excel
+                                    file.
+                                </p>
+                            </div>
+                            <!-- the document type level tab content -->
+                            {% for sample, sample_data in samples.items() %}
+                            <div class="tab-pane fade" id="{{ sample }}">
+                                <!-- <h4 class="mt-2">{{sample}}</h4> -->
+                                <p></p>
+                                <p>Number of '{{sample}}' documents in file: {{ sample_data['no_of_docs'] }}</p>
+                                <ul class="nav nav-tabs">
+                                    <li class="nav-item">
+                                        <a href="#{{ sample }}stats" class="nav-link active" data-toggle="tab">Tag
+                                            Statistics</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="#{{ sample }}data" class="nav-link" data-toggle="tab">Sample Data</a>
+                                    </li>
+                                </ul>
+                                <div class="tab-content">
+
+                                    <div class="tab-pane fade show active" id="{{ sample }}stats">
+                                        <p></p>
+                                        <table class="table table-mediumfont table-sm table-hover">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th scope="col">Tag</th>
+                                                    <th scope="col">Max Repetitions</th>
+                                                    <th scope="col">Min Repetitions</th>
+                                                    <th scope="col">Avg Repetitions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <!-- sample_data['tag_stats'] is a list, not a dict; 
+                                                        hence loop through the list and not the items of a dict-->
+                                                {% set rows = sample_data['tag_stats']%}
+                                                {% for tag, max_rep, min_rep, avg_rep in rows%}
+                                                <tr>
+                                                    <td>{{ tag }}</td>
+                                                    <td>{{ max_rep }}</td>
+                                                    <td>{{ min_rep }}</td>
+                                                    <td>{{ avg_rep }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="tab-pane fade" id="{{ sample }}data">
+                                        <p></p>
+                                        <table class="table table-mediumfont table-sm table-hover">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th scope="col">Tag</th>
+                                                    <th scope="col">Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for tag, value in sample_data['sample_data'].items()%}
+                                                <tr>
+                                                    <td>{{ tag }}</td>
+                                                    <td>{{ value }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        {% endif %}
+                    </div>
+                </div>
+                {% if fp.file_processed %}
+                <div class="row justify-content-md-center pt-3">
+                    <div class="col-md-6 text-center">
+                        {{ form.buildexcel(class="btn btn-outline-info") }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </fieldset>
+    </form>
+</div>
+{% endblock content %}

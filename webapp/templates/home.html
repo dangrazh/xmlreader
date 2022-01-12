@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<h1>Welcome to {{ app_title }}</h1>
+<p>This is the start page of the app {{ app_title }}</p>
+<img src="{{ url_for('static', filename='nucleus.png') }}" style="width:700px;height:700px;">
+
+{% endblock content %}

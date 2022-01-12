@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="content-section">
+    <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <fieldset class="form-group">
+            <legend class="border-bottom mb-4">XML Parser</legend>
+            <div class="form-group">
+                <div class="text-left">Summary of loaded file:</div>
+                <div class="card card-body bg-light">
+                    {% for attr in fp.info() %}
+                    {{ attr }} <br>
+                    {% endfor %}
+                </div>
+            </div>
+        </fieldset>
+        <div class="form-group">
+            {{ form.btn_details(class="btn btn-outline-info") }}
+            {{ form.btn_next(class="btn btn-outline-info") }}
+        </div>
+    </form>
+</div>
+{% endblock content %}

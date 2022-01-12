@@ -1,0 +1,92 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="content-section">
+    <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <fieldset class="form-group">
+            <legend class="border-bottom mb-4">XML Parser</legend>
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="text-left mb-3">Summary of loaded file:</div>
+                    <table class="table table-smallfont table-sm table-hover">
+                        <tbody>
+                            {% for attr in fp.info() %}
+                            <tr>
+                                <td>{{ attr }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-8">
+                    <div class="text-left mb-3">File details:</div>
+                    <table class="table table-smallfont table-sm table-hover">
+                        <tbody>
+                            {% set debug_info = fp.debug_info() %}
+                            {% for attr, value in debug_info.items() %}
+                            <tr>
+                                <td>{{attr}}</td>
+                                <td>{{value}}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="form-group">
+                {% if fp.file_processed %}
+                <div class="row">
+                    <div class="text-left mb-3">Process log:</div>
+                    <table class="table table-smallfont table-sm table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th scope="col">Doc #</th>
+                                <th scope="col">Log level</th>
+                                <th scope="col">Log entry</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc_id, log_level, logentry in fp.get_process_log() %}
+                            <tr>
+                                <td>{{ doc_id }}</td>
+                                <td>{{ log_level }}</td>
+                                <td>{{ logentry }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+                <div class="row pt-3">
+                    <div class="col-md-6 flex-grow-1">
+                        <div class="text-left mb-3">Documents in file:</div>
+                    </div>
+                </div>
+                <div class="row" style="min-height: 400px;">
+                    <table class="table table-smallfont table-sm table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Document</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc_id, xml_doc in fp.get_xml_docs_valid() %}
+                            <tr>
+                                <td>{{ doc_id }}</td>
+                                <td>{{ xml_doc }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="row justify-content-md-center pt-3">
+                    <div class="col-md-6 text-center">
+                        {{ form.btn_cancel(class="btn btn-outline-info") }}
+                        {{ form.btn_next(class="btn btn-outline-info") }}
+                    </div>
+                </div>
+        </fieldset>
+    </form>
+</div>
+{% endblock content %}

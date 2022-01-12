@@ -1,0 +1,143 @@
+body {
+  background: #fafafa;
+  color: #333333;
+  margin-top: 5rem;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #444444;
+}
+
+.bg-steel {
+  background-color: #5f788a;
+}
+
+.bg-silver {
+  background-color: #a7adba;
+}
+
+.bg-rose {
+  background-color: #f7e5e1;
+}
+
+.bg-green {
+  background-color: #36802d;
+}
+
+.site-header .navbar-nav .nav-link {
+  /* 
+     This is the pale blue that goes well
+     with the bg-steel background
+  */
+  color: #cbd5db;
+
+  /* 
+     This is the pale green that goes well
+     with the bg-green background
+  */
+ /* color: #f0f7da;*/
+}
+
+.site-header .navbar-nav .nav-link:hover {
+  color: #ffffff;
+
+}
+
+.site-header .navbar-nav .nav-link.active {
+  font-weight: 500;
+}
+
+.text-paleblue {
+
+  /* 
+     This is the pale blue that goes well
+     with the bg-steel background
+  */
+  color: #cbd5db;
+
+}
+
+.container .navbar-nav .nav-link {
+  /* 
+     This is the pale blue that goes well
+     with the bg-steel background
+  */
+  color: #cbd5db;
+
+  /* 
+     This is the pale green that goes well
+     with the bg-green background
+  */
+ /* color: #f0f7da;*/
+}
+
+.container .navbar-nav .nav-link:hover {
+  color: #ffffff;
+
+}
+
+.container .navbar-nav .nav-link.active {
+  font-weight: 500;
+}
+
+.content-section {
+  background: #ffffff;
+  padding: 10px 20px;
+  border: 1px solid #dddddd;
+  border-radius: 3px;
+  margin-bottom: 20px;
+}
+
+.content-section-narrow {
+  background: #ffffff;
+  padding: 5px 10px;
+  border: 1px solid #dddddd;
+  border-radius: 3px;
+  margin-bottom: 10px;
+}
+
+.table-smallfont {
+  font-size: 0.8rem !important;
+}
+
+.table-mediumfont {
+  font-size: 0.9rem !important;
+}
+
+
+.loader {
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+textarea {
+  height: 100%;
+}
+
+textarea.textarea-autosize {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  resize: none;
+  overflow-y:hidden;
+}
+
+textarea.textarea-autosize.form-control-lg {
+  height: 3.75rem;
+  min-height: 3.75rem;
+}
+
+textarea.textarea-autosize.form-control-sm {
+  height: 2rem;
+  min-height: 2rem;
+}
+
+

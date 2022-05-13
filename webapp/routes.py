@@ -1,6 +1,9 @@
 import re
 import secrets
 import os
+import json
+from time import sleep
+from turtle import title
 from flask import (
     render_template,
     url_for,
@@ -8,13 +11,18 @@ from flask import (
     redirect,
     send_from_directory,
     session,
+    jsonify,
+    request,
+    Response,
 )  # ,  request
+
 from werkzeug.utils import secure_filename
 
 from webapp import app
 from webapp import APP_TITLE, APP_VERSION, APP_AUTHOR
 
 from webapp.forms import (
+    AjaxTestForm,
     XmlFileDetailForm,
     XmlMainForm,
     XmlSummaryForm,
@@ -66,9 +74,18 @@ def xmlparserupload():
         file_name.save(os.path.join(file_dir, sec_file_name))
         print(stopwatch.time_run())
 
+        # get the delimiter option
+        delim_option = form.use_deffaut_separators.data
+        if delim_option == 2:
+            custom_delimiter = form.custom_separators.data
+        else:
+            custom_delimiter = None
         # process the file
         stopwatch = StopWatch(run_label="create fp object")
-        fp = FileProcessor(os.path.join(file_dir, sec_file_name))
+        fp = FileProcessor(
+            source_file=os.path.join(file_dir, sec_file_name),
+            custom_separator=custom_delimiter,
+        )
         print(stopwatch.time_run())
 
         # time this one for profiling purposes
@@ -106,7 +123,7 @@ def xmlparserfilesummary():
             return redirect(url_for("xmlparserdetails"))
         elif form.btn_next.data:
             return redirect(url_for("xmlparsermain"))
-    print("rendering template")
+    print("rendering xmlparserfilesummary template")
     return render_template(
         "xmlparserfilesummary.html",
         app_title=APP_TITLE,
@@ -235,27 +252,27 @@ def xmlparsermain():
                 flash("Parsing the file resulted in errors or warnings!", "danger")
                 return redirect(url_for("xmlparserdetails"))
 
-        elif form.buildexcel.data:
+        elif form.downloadexcel.data:
             file_dir = os.path.join(app.root_path, "results")
 
-            # get the fp object from the session
-            stopwatch = StopWatch(run_label="get fp object from session")
-            fp = session["FileProcessor"]
-            print(stopwatch.time_run())
+            # # get the fp object from the session
+            # stopwatch = StopWatch(run_label="get fp object from session")
+            # fp = session["FileProcessor"]
+            # print(stopwatch.time_run())
 
-            # create the Excel itself
-            stopwatch = StopWatch(run_label="fp.to_excel")
-            gen_excel_result = fp.to_excel(file_dir)
-            print(stopwatch.time_run())
+            # # create the Excel itself
+            # stopwatch = StopWatch(run_label="fp.to_excel")
+            # gen_excel_result = fp.to_excel(file_dir)
+            # print(stopwatch.time_run())
 
-            if "No output data extracted" in gen_excel_result:
-                flash(gen_excel_result, "danger")
-                return redirect(url_for("xmlparsermain"))
-            else:
-                flash(gen_excel_result, "success")
-                return send_from_directory(
-                    directory=file_dir, filename=gen_excel_result, as_attachment=True
-                )
+            # if "No output data extracted" in gen_excel_result:
+            #     flash(gen_excel_result, "danger")
+            #     return redirect(url_for("xmlparsermain"))
+            # else:
+            #     flash(gen_excel_result, "success")
+            return send_from_directory(
+                directory=file_dir, filename=fp.generated_excel_name, as_attachment=True
+            )
 
     return render_template(
         "xmlparsermain.html",
@@ -266,3 +283,161 @@ def xmlparsermain():
         samples=samples,
         # parsed=parsed,
     )
+
+
+# @app.route("/xmlparser/createexcel", methods=["POST"])
+# def create_excel():
+
+#     return_msg = {"returnMsg": "n/a"}
+
+#     # POST request
+#     if request.method == "POST":
+#         print("Incoming request")
+#         print(request.get_json())  # parse as JSON
+
+#         print("createexcel returning OK")
+#         return_msg["returnMsg"] = "OK"
+#         return jsonify(return_msg), 200
+
+
+@app.route("/xmlparser/createexcel", methods=["POST"])
+def create_excel():
+
+    form = XmlMainForm()
+    return_msg = {"returnStatus": "n/a", "returnMsg": "n/a"}
+
+    # POST request
+    if request.method == "POST":
+        # print("Incoming..")
+        # print(request.get_json())  # parse as JSON
+
+        sleep(3)
+        # print(request)
+        # get the json from the POST request
+        request_data = request.get_json()
+
+        file_dir = os.path.join(app.root_path, "results")
+
+        # get the fp object from the session
+        stopwatch = StopWatch(run_label="get fp object from session")
+        fp = session["FileProcessor"]
+        print(stopwatch.time_run())
+
+        try:
+            # create the Excel itself
+            stopwatch = StopWatch(run_label="fp.to_excel")
+            gen_excel_result = fp.to_excel(file_dir, request_data)
+            print(stopwatch.time_run())
+        except Exception as e:
+            flash("There was an issue creating the Excel!", "danger")
+            print(f"the following error occurred: {e}\ncreateexcel returning NOK")
+            return_msg["returnStatus"] = "NOK"
+            return_msg["returnMsg"] = "There was an issue creating the Excel!"
+            # ret_msg = jsonify(return_msg)
+            # resp = Response(
+            #     response=ret_msg,
+            #     status=200,
+            #     headers={"Access-Control-Allow-Origin": "*"},
+            #     content_type="application/json",
+            # )
+            # resp.headers["Access-Control-Allow-Origin"] = "*"
+            # return resp
+
+            return jsonify(return_msg), 200
+
+        # save the ft object to the session
+        session["FileProcessor"] = fp
+
+        if "No output data extracted" in gen_excel_result:
+            flash(
+                "There was no output data to process, therefore no Excel generated!",
+                "danger",
+            )
+            # return redirect(url_for("xmlparsermain"))
+            print("createexcel returning NOK")
+            return_msg["returnStatus"] = "NOK"
+            return_msg[
+                "returnMsg"
+            ] = "There was no output data to process, therefore no Excel generated!"
+            # ret_msg = jsonify(return_msg)
+            # resp = Response(
+            #     response=ret_msg,
+            #     status=200,
+            #     headers={"Access-Control-Allow-Origin": "*"},
+            #     content_type="application/json",
+            # )
+            # resp.headers["Access-Control-Allow-Origin"] = "*"
+            # return resp
+
+            return jsonify(return_msg), 200
+            # return render_template(
+            #     "xmlparsermain.html",
+            #     app_title=APP_TITLE,
+            #     title="XML Parser",
+            #     form=form,
+            #     fp=fp,
+            #     samples={},
+            # )
+            # return redirect(url_for("xmlparsermain"))
+
+        else:
+            flash("Excel successfully created & ready for download!", "success")
+            print("createexcel returning OK")
+            return_msg["returnStatus"] = "OK"
+            return_msg["returnMsg"] = "Excel successfully created & ready for download!"
+            # ret_msg = jsonify(return_msg)
+            # resp = Response(
+            #     response=ret_msg,
+            #     status=200,
+            #     headers={"Access-Control-Allow-Origin": "*"},
+            #     content_type="application/json",
+            # )
+            # resp.headers["Access-Control-Allow-Origin"] = "*"
+            # return resp
+
+            return jsonify(return_msg), 200
+            # return render_template(
+            #     "xmlparsermain.html",
+            #     app_title=APP_TITLE,
+            #     title="XML Parser",
+            #     form=form,
+            #     fp=fp,
+            #     samples={},
+            # )
+            # return redirect(url_for("xmlparsermain"))
+
+
+# @app.route("/ajaxtest", methods=["GET", "POST"])
+# def ajax_test():
+#     form = AjaxTestForm()
+
+#     return render_template(
+#         "ajaxtest.html",
+#         title="Ajax Test",
+#         form=form,
+#     )
+
+
+# @app.route("/ajaxapi", methods=["GET", "POST"])
+# def ajax_api():
+#     # POST request
+#     if request.method == "POST":
+#         print("Incoming..")
+#         print(request.get_json())  # parse as JSON
+#         return "OK", 200
+
+#     # GET request
+#     else:
+#         message = {"greeting": "Hello from Flask!"}
+#         return jsonify(message)  # serialize and use JSON headers
+
+
+# @app.route("/ajaxapi2", methods=["GET", "POST"])
+# def get_data():
+#     if request.method == "POST":
+#         data = json.loads(request.data)
+#         ss = data["messageClient"]
+#         ss = "I received: " + ss
+#         print(ss)
+#         print("Returning that message now")
+#         return jsonify(ss)

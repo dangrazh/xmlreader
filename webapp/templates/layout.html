@@ -74,16 +74,53 @@
 				{% endwith %}
 				{% block content %}{% endblock %}
 			</div>
+			<!-- Modal Status update to user-->
+			<div class="modal" id="loadingModal" tabindex="-1" role="dialog" aria-labelledby="loadingModal"
+				aria-hidden="true">
+				<div class="modal-dialog modal-dialog-centered" role="document">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h5 class="modal-title" id="loadingModal">Processing ongoing</h5>
+							<!--
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+								<span aria-hidden="true">&times;</span>
+							</button>
+							-->
+						</div>
+						<div class="modal-body">
+							<div class="row align-items-md-center">
+								<div class="col-md-2">
+									<img src="{{url_for('static', filename='loading.gif')}}" width="80" height="80">
+								</div>
+								<div class="col-md-8 flex-grow-1 justify-content-md-left" id="modal_body">
+									*** THIS IS A PLACEHOLDER TEXT ***
+								</div>
+							</div>
+
+						</div>
+
+						<div class="modal-footer small justify-content-md-center">
+							Please refer to the open cmd window for detailed status updates.
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
-		</div>
+		<!-- </div> -->
 	</main>
 
 	<!-- Bootstrap stuff -->
 	<!-- Optional JavaScript -->
 	<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+
+	<!--  jQuery slim (without ajax) 
 	<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
 		integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
-		crossorigin="anonymous"></script>
+		crossorigin="anonymous"></script> -->
+
+	<!-- jQuery full version supporting ajax -->
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
 		integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
 		crossorigin="anonymous"></script>
@@ -91,6 +128,12 @@
 		integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
 		crossorigin="anonymous"></script>
 	<!-- End of Bootstrap stuff -->
+
+
+	<!-- Custom JavaScript sources -->
+	<script src="{{url_for('static', filename='shared-functions.js')}}"></script>
+	{% block scripts %}{% endblock %}
+	<!-- End of custom JavaScript sources -->
 </body>
 
 </html>

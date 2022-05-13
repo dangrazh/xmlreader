@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="content-section">
+    <form method="POST" action="" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        <fieldset class="form-group">
+            <legend class="border-bottom mb-4">XML Parser</legend>
+            <div class="form-group">
+                <span id="UID_afficheTest" style='text-align: center;'>defaut</span>
+            </div>
+        </fieldset>
+        <div class="form-group">
+            <input type="submit" value="Get data" onclick="getDataFromServer()" />
+            <input type="submit" value="Get data json" onclick="getDataFromServerJson()" />
+            <input type="submit" value="Push data" onclick="postDataToServer()" />
+            <button id="UID_boutonTest" onclick="postAndGetDatajQuery()">jQuery Test</button>
+        </div>
+    </form>
+</div>
+{% endblock content %}
+
+{% block scripts %}
+<!-- Custom JavaScript sources-->
+<script src="{{url_for('static', filename='ajax-functions.js')}}"></script>
+<!-- End of custom JavaScript sources-->
+{% endblock scripts %}

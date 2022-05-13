@@ -1,14 +1,14 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="content-section">
-    <form method="POST" action="" enctype="multipart/form-data">
+    <form method="POST" name="xmlupload" action="" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <fieldset class="form-group">
             <legend class="border-bottom mb-4">XML Parser</legend>
             <div class="form-group">
-                <p>This function allows you to upload and process a file and subsequently inspect it. Once the settings
-                    fit the file content you can then produce an excel file containing a tab for each document type
-                    identified in the file.
+                <p style="margin-bottom: 50px;">This function allows you to upload and process a file and subsequently
+                    inspect it. Once the settings fit the file content you can then produce an excel file containing a
+                    tab for each document type identified in the file.
                 </p>
                 {{ form.sourcefile(class="form-control-file") }}
                 {% if form.sourcefile.errors %}
@@ -16,11 +16,51 @@
                 <span class="text-danger">{{ error }}</span></br>
                 {% endfor %}
                 {% endif %}
+                <p></p>
+                <!--
+                <div class="content-section">
+                    {{ form.use_deffaut_separators.label() }} <br>
+                    {{ form.use_deffaut_separators(onchange="toggleCustomSeparatorInput()") }}
+                    {{ form.custom_separators.label(style="display: none") }} {{ form.custom_separators(style="display:
+                    none") }}
+                </div>
+                -->
+                <div class="content-section" style="margin-top: 50px;">
+                    {{ form.use_deffaut_separators.label() }} <br>
+
+                    {% for subfield in form.use_deffaut_separators %}
+                    <tr>
+                        <td>{{ subfield(onchange="toggleCustomSeparatorInput()") }}</td>
+                        <td>{{ subfield.label }}</td>
+                        <td>&nbsp;&nbsp;&nbsp;</td>
+                    </tr>
+                    {% endfor %}
+                    <div class="text-left" id="cust_separator_group" style="display:none">
+                        <table>
+                            <tr height="40px">
+                                <td style="vertical-align: bottom;">{{
+                                    form.custom_separators.label()
+                                    }}</td>
+                                <td>&nbsp;&nbsp;&nbsp;</td>
+                                <td>{{ form.custom_separators() }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
             </div>
         </fieldset>
         <div class="form-group">
             {{ form.btn_submit(class="btn btn-outline-info") }}
+            <!-- <button type="button" class="btn btn-outline-info" data-toggle="modal" onclick="startProcessing();">
+                Upload & Split
+            </button> -->
         </div>
     </form>
 </div>
 {% endblock content %}
+
+{% block scripts %}
+<!-- Page specific JavaScript sources-->
+<script src="{{url_for('static', filename='xmlparserupload-functions.js')}}"></script>
+<!-- End of page specific JavaScript sources-->
+{% endblock scripts %}

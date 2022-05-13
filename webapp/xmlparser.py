@@ -7,12 +7,14 @@ Alternatively, the parsed document can be printed as indented tree or flattened 
 # Imports
 # ------------------
 # import sys
+from msilib.schema import Error
 import os
 
 # import errno
 import datetime as dt
 import tempfile
 from typing import Any
+from xmlrpc.client import Boolean
 
 # import pathlib
 # import getpass
@@ -20,9 +22,16 @@ from typing import Any
 import regex as re
 import enum
 from dataclasses import dataclass
-import pandas as pd
+
+# import pandas as pd
 
 from bs4 import BeautifulSoup as bs
+
+# import for usage in flask app
+from webapp.forwardstar import ForwardStar, ForwardStarData
+
+# import for standalone usage
+# from forwardstar import ForwardStar
 
 # from bs4.diagnose import diagnose
 
@@ -47,9 +56,18 @@ __status__ = "Development"
 
 
 @dataclass
+class Result:
+
+    __slots__ = ("ok", "result")
+
+    ok: Boolean
+    result: Any
+
+
+@dataclass
 class TagAndValue:
 
-    __slots__ = ["key", "value"]
+    __slots__ = ("key", "value")
 
     key: str
     value: Any
@@ -62,9 +80,15 @@ class AttributeUsage(enum.Enum):
     ignore = 4
 
 
+class TagType(int, enum.Enum):
+    node: int = 0
+    data_tag: int = 1
+
+
 class XmlParser:
 
-    __slots__ = [
+    __slots__ = (
+        "doc_id",
         "doc_str",
         "soup",
         "tags",
@@ -72,12 +96,20 @@ class XmlParser:
         "type",
         "source_no_of_tags",
         "soup_no_of_tags",
-    ]
+        "tag_id",
+        "fstar",
+    )
 
     # ------------------
     # Standard Functions
     # ------------------
-    def __init__(self, document_string, top_node_tree_level=0, type_distance_to_top=1):
+    def __init__(
+        self,
+        document_string,
+        top_node_tree_level=0,
+        type_distance_to_top=1,
+        document_id=0,
+    ):
 
         # replace the ? in the XML Prolog as this caused
         # BeautifulSoup to return a completely broken object
@@ -90,6 +122,7 @@ class XmlParser:
             # )
 
         # set the basic attributes
+        self.doc_id = document_id
         self.doc_str = document_string
         self.soup = bs(document_string, "xml")
         self.tags = self._get_tags()
@@ -129,20 +162,33 @@ class XmlParser:
         self, attribute_usage=AttributeUsage.add_to_tag_name, concat_on_key_error=False
     ):
 
+        # # OLD: initialize the forward star - 0 is the static root element of the tree
+        self.tag_id = 0
+        # # parent_tag_id = 0
+        # self.fstar = ForwardStar(self.tag_id)
+
+        # NEW: initialize the forward star as None
+        self.fstar = None
+
         doc_cont = {}
-        self._process_document(
-            self.top_node, doc_cont, attribute_usage, concat_on_key_error
-        )
-        return doc_cont
+        try:
+            self._process_document(
+                self.top_node, doc_cont, attribute_usage, concat_on_key_error
+            )
+            return Result(ok=True, result=doc_cont)
+        except Exception as e:
+            return Result(ok=False, result=e)
+
+        # return doc_cont
 
     # ------------------
     # Internal Functions
     # ------------------
     def _get_tags(self):
-        soup_tags = []
-        for itm in self.soup.descendants:
-            if itm.name:
-                soup_tags.append(itm.name)
+        soup_tags = [itm.name for itm in self.soup.descendants if itm.name]
+        # for itm in self.soup.descendants:
+        #     if itm.name:
+        #         soup_tags.append(itm.name)
 
         return soup_tags
 
@@ -198,9 +244,16 @@ class XmlParser:
                     self._traverse_document_flat(child, attribute_usage, path, level)
 
     def _process_document(
-        self, bs_elem, doc_cont, attribute_usage, concat_on_key_error, path=""
+        self,
+        bs_elem,
+        doc_cont,
+        attribute_usage,
+        concat_on_key_error,
+        path="",
+        level=0,
+        parent_tag_id=0,
     ):
-
+        level += 1
         if str(type(bs_elem)) == "<class 'bs4.element.Tag'>":
             if bs_elem.name:
                 if bs_elem.string and len(list(bs_elem.descendants)) == 1:
@@ -214,28 +267,77 @@ class XmlParser:
                                 key = attr.key
                                 value = attr.value
                                 self._process_field(
-                                    doc_cont, key, value, concat_on_key_error
+                                    doc_cont,
+                                    key,
+                                    value,
+                                    concat_on_key_error,
+                                    level,
+                                    parent_tag_id,
+                                    TagType.data_tag,
                                 )
                         else:
                             key = attrs.key
                             value = attrs.value
                             self._process_field(
-                                doc_cont, key, value, concat_on_key_error
+                                doc_cont,
+                                key,
+                                value,
+                                concat_on_key_error,
+                                level,
+                                parent_tag_id,
+                                TagType.data_tag,
                             )
                     else:
                         key = f"{path}.{bs_elem.name}"
                         value = bs_elem.string
-                        self._process_field(doc_cont, key, value, concat_on_key_error)
-
+                        self._process_field(
+                            doc_cont,
+                            key,
+                            value,
+                            concat_on_key_error,
+                            level,
+                            parent_tag_id,
+                            TagType.data_tag,
+                        )
                 else:
+                    # Tag with further descendants
+                    # TODO: check for attributes that would need to be processed
+
+                    # build path
                     if len(path) > 0:
                         path = path + "." + bs_elem.name
                     else:
                         path = bs_elem.name
 
+                    # add a "node only" field
+                    key = path
+                    value = "__node__"
+                    self._process_field(
+                        doc_cont,
+                        key,
+                        value,
+                        concat_on_key_error,
+                        level,
+                        parent_tag_id,
+                        TagType.node,
+                    )
+
+                    # disabled as already done in _process_field for "node only" field
+                    # self.tag_id += 1
+                    # self.fstar.add_child(parent_tag_id, self.tag_id)
+
+                    # make the child the new parent
+                    parent_tag_id = self.tag_id
+
                 for child in bs_elem.children:
                     self._process_document(
-                        child, doc_cont, attribute_usage, concat_on_key_error, path
+                        child,
+                        doc_cont,
+                        attribute_usage,
+                        concat_on_key_error,
+                        path,
+                        level,
+                        parent_tag_id,
                     )
 
     def _process_attrs(self, bs_elem, path, attribute_usage):
@@ -278,19 +380,33 @@ class XmlParser:
 
         return ret_val
 
-    def _process_field(self, doc_cont, key, value, concat_on_key_error):
+    def _process_field(
+        self, doc_cont, key, value, concat_on_key_error, level, parent_tag_id, tag_type
+    ):
 
+        # icrease tag id and add tag to fstar
+        self.tag_id += 1
+        if self.fstar:
+            self.fstar.add_child(parent_tag_id, self.tag_id)
+        else:
+            self.fstar = ForwardStar(self.tag_id)
+
+        # process the key / value pair
         if key in doc_cont:
             if concat_on_key_error:
                 old_value = doc_cont[key]
                 # doc_cont[key] = old_value + " | " + value
                 if isinstance(old_value, list):
+                    # this creates a list of tag id, depth, value triplets in the following form: [(tagid, depth, value, tag_type), (tagid, depth, value, tag_type), (tagid, depth, value, tag_type)]
                     value_list = old_value
-                    value_list.append(value)
+                    value_list.append((self.tag_id, level, value, tag_type))
+                # elif isinstance(old_value, list) and len(old_value) == 1:
+                #     # this is a single tag id / value pair (which are a list of 2 items)
+                #     value_list = []
+                #     value_list.append(old_value)
+                #     value_list.append([self.tag_id, value])
                 else:
-                    value_list = []
-                    value_list.append(old_value)
-                    value_list.append(value)
+                    print("I never pass here...")
                 doc_cont[key] = value_list
             else:
                 raise KeyError(
@@ -299,7 +415,10 @@ class XmlParser:
                     f"Existing tag value: {doc_cont[key]}"
                 )
         else:
-            doc_cont[key] = value
+            value_list = []
+            # this creates a single tag id, depth, value triplet in the following form: [(tagid, depth, value)]
+            value_list.append((self.tag_id, level, value, tag_type))
+            doc_cont[key] = value_list
 
 
 # -------------------------------------------------------------------------------

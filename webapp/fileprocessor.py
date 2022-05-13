@@ -9,6 +9,7 @@ import os
 import datetime as dt
 from re import I
 import tempfile
+from datetime import datetime
 
 # import re
 import regex as re
@@ -18,9 +19,10 @@ import xlsxwriter
 # import pandas as pd
 
 # import for usage in flask app
-from webapp.xmlparser import XmlParser, AttributeUsage
+from webapp.xmlparser import XmlParser, AttributeUsage, Result
 from webapp.xmlvalidator import XmlValidator  # , ValidationResult
-from webapp.persistencemanager import (
+
+from webapp.pm5 import (
     PersistenceManager,
     DocValidity,
     XmlAttribute,
@@ -28,11 +30,17 @@ from webapp.persistencemanager import (
     LogLevel,
 )
 
-# imports for profiling
+# from webapp.persistencemanager import (
+#     PersistenceManager,
+#     DocValidity,
+#     XmlAttribute,
+#     IndexGroup,
+#     LogLevel,
+# )
+
+# # imports for profiling in flask
 from webapp.profiler import profile, StopWatch
 
-# from memory_profiler import profile
-# from webapp.profiler import get_actualsizeof
 
 # import for standalone usage
 # from xmlparser import XmlParser, AttributeUsage
@@ -66,7 +74,7 @@ class FileProcessor:
     # ------------------
     # Standard Functions
     # ------------------
-    def __init__(self, source_file, data_directory=None):
+    def __init__(self, source_file, custom_separator=None, data_directory=None):
 
         with open(source_file) as file_handle:
 
@@ -77,43 +85,53 @@ class FileProcessor:
             self.file_name = os.path.basename(file_handle.name)
             self.file_name_root = os.path.splitext(self.file_name)[0]
             self.line_count = self.file_content.count("\n")
+            self.custom_separator = custom_separator
 
-        # get the current temporary directory
-        self._temp_path = tempfile.gettempdir()
+        if data_directory:
+            self._data_path = data_directory
+        else:
+            # get the current temporary directory
+            self._data_path = tempfile.gettempdir()
 
         # create the persistence manager
-        self.pm = PersistenceManager(data_directory=self._temp_path)
+        self.pm = PersistenceManager(data_directory=self._data_path)
         self.db_name = self.pm.db_name
 
         # define the identifiers of a xml document
         self.xml_identifiers = {}
 
-        # define the regex to split
-        # 1st xml prolog + document tag
-        # 2nd xml prolog not followed by document tag [ regex with negative lookahead -> (?!<Document .*?>) ]
-        # 3rd document tag not preceeded by xml prolog [ regex with negative lookbehind -> (?<!<\?xml .*?>) ]
-        #     (the negative lookbehind with non fixed width requires the pyhton regex module to wokr as the
-        #     standard python re module only supports negative lookbehind with fixed width)
-        # Important: every regex has to be a single capturing group i.e. enclosed with () and cannot contain
-        #            subcapturing groups, i.e. other parts enclosed in () -> exception: the lookbehind and
-        #            lookahead groups that need to be enclosed in () but are not considered as capturing groups
-        #            by the regex engine - this is important as the number of groups is used in logic in the
-        #            _split_into_documents() function.
-        # Performance improvements from: https://www.loggly.com/blog/five-invaluable-techniques-to-improve-regex-performance/
-        self.re_split = [
-            r"(<\?xml .*?><Document .*?>)",
-            r"(<\?xml .*?>(?!<Document .*?>))",
-            r"((?<!<\?xml .*?>)<Document .*?>)",
-        ]
+        if not self.custom_separator:
 
-        # Final regex to split using a positive lookahead (?=...), where (?={}) will be replaced
-        # with the delimiters defined in the list above, joined with | to get an "or" match
-        # in the regex split function. The (?!$) matches only a location that is not
-        # immediately followed with the end of string - removed this to test performance impact
-        # print(r"(?={})(?!$)".format("|".join(self.re_split)))
-        self.comp_re_split = re.compile(
-            r"(?={})".format("|".join(self.re_split)), re.IGNORECASE
-        )
+            # define the regex to split
+            # 1st xml prolog + document tag
+            # 2nd xml prolog not followed by document tag [ regex with negative lookahead -> (?!<Document .*?>) ]
+            # 3rd document tag not preceeded by xml prolog [ regex with negative lookbehind -> (?<!<\?xml .*?>) ]
+            #     (the negative lookbehind with non fixed width requires the pyhton regex module to wokr as the
+            #     standard python re module only supports negative lookbehind with fixed width)
+            # Important: every regex has to be a single capturing group i.e. enclosed with () and cannot contain
+            #            subcapturing groups, i.e. other parts enclosed in () -> exception: the lookbehind and
+            #            lookahead groups that need to be enclosed in () but are not considered as capturing groups
+            #            by the regex engine - this is important as the number of groups is used in logic in the
+            #            _split_into_documents() function.
+            # Performance improvements from: https://www.loggly.com/blog/five-invaluable-techniques-to-improve-regex-performance/
+            self.re_split = [
+                r"(<\?xml .*?><Document .*?>)",
+                r"(<\?xml .*?>(?!<Document .*?>))",
+                r"((?<!<\?xml .*?>)<Document .*?>)",
+            ]
+
+            # Final regex to split using a positive lookahead (?=...), where (?={}) will be replaced
+            # with the delimiters defined in the list above, joined with | to get an "or" match
+            # in the regex split function. The (?!$) matches only a location that is not
+            # immediately followed with the end of string - removed this to test performance impact
+            # print(r"(?={})(?!$)".format("|".join(self.re_split)))
+            self.comp_re_split = re.compile(
+                r"(?={})".format("|".join(self.re_split)), re.IGNORECASE
+            )
+
+        else:
+            self.re_split = f"({custom_separator})"
+            self.comp_re_split = re.compile(self.re_split, re.IGNORECASE)
 
         # the delimiters and process log stores
         self.doc_delimiters = []
@@ -121,6 +139,10 @@ class FileProcessor:
 
         # flag if file has already been processed
         self.file_processed = False
+
+        # flag if excel has been created and file name
+        self.generated_excel = False
+        self.generated_excel_name = None
 
         # define comments to ignore
         # TODO: include in process file, resp. in pre-processing cleanup
@@ -154,7 +176,7 @@ class FileProcessor:
             f"file_name: {self.file_name}\n"
             f"file_name_root: {self.file_name_root}\n"
             f"no_of_docs_in_file: {self.no_of_docs_in_file}\n"
-            f"temp_path: {self._temp_path}\n"
+            f"temp_path: {self._data_path}\n"
         )
         return out_string
 
@@ -173,15 +195,21 @@ class FileProcessor:
         type_distance_to_top=1,
     ):
 
-        # initialize the internal store for the the output
-        self.doc_types = {}
-        # self.process_log = []
+        # truncate the process log and remove indices
+        self.pm.drop_indices(IndexGroup.PROCESS_LOG)
         self.pm.truncate_process_log()
+
+        # check if file has already been processed
+        # if yes, truncate all xlm related tables and remove indices
+        if self.file_processed:
+            self.pm.drop_indices(IndexGroup.XML_STORE)
+            self.pm.truncate_xml_store()
 
         # initialize the return value
         out = "success"
 
-        print(f"No of docs to process: {self.pm.get_doc_count(DocValidity.VALID)}")
+        docs_to_process = self.pm.get_doc_count(DocValidity.VALID)
+        print(f"No of docs to process: {docs_to_process}")
 
         # for index, doc_validity, xml_doc, doc_invalid_reason in self.pm.get_all_docs(
         #     DocValidity.VALID
@@ -192,13 +220,18 @@ class FileProcessor:
         for index, doc_validity, xml_doc, doc_invalid_reason in self.pm.get_all_docs(
             DocValidity.VALID
         ):
+            if index % 20_000 == 0:
+                # commit every 20'000 records
+                self.pm.commit_writes()
+
             # print(f"START: Processing document #{index}...")
-            if index % 10000 == 0:
-                print(f"START: Processing document #{index}...")
+            progress_pct = round((index * 100) / docs_to_process, 2)
+            if (progress_pct).is_integer():
+                print(f"Processing documents is at {progress_pct:3.0f}%...", end="\r")
             # the actual processing
             try:
                 xml_parsed = XmlParser(
-                    xml_doc, top_node_tree_level, type_distance_to_top
+                    xml_doc, top_node_tree_level, type_distance_to_top, index
                 )
             except ValueError as e:
                 # print(
@@ -242,32 +275,50 @@ class FileProcessor:
                 # read the tags and values from the parsed xml document
                 # the error handling is actually not needed as the option
                 # concat_on_key_error=True will not raise any KeyErrors
-                try:
-                    tags_n_values = xml_parsed.get_tags_and_values(
-                        attribute_usage, concat_on_key_error
-                    )
-                except KeyError as e:
-                    # print(
-                    #     f"ERROR: skipping document #{index} due to the following error: {e}"
-                    # )
+
+                tags_n_values = xml_parsed.get_tags_and_values(
+                    attribute_usage, concat_on_key_error
+                )
+                if tags_n_values.ok:
+                    tags_n_values = tags_n_values.result
+                    self.pm.store_xml_parsed(index, tags_n_values, xml_parsed)
+                else:
+                    e = tags_n_values.result
                     self.pm.log_error(
                         index,
                         f"ERROR: skipping document #{index} due to the following error: {e}",
                     )
-                    # self.process_log.append(
-                    #     f"ERROR: skipping document #{index} due to the following error: {e}"
-                    # )
-                    out = "error"
-                else:
-                    # append the new record to the list for the current document type
-                    # and store/update the new list in the dict holding all document type lists
-                    # doc_data.append(tags_n_values)
-                    # self.doc_types[xml_parsed.type] = doc_data
 
-                    # safe the parsed document to the database
-                    self.pm.store_xml_parsed(index, tags_n_values, xml_parsed)
+                # try:
+                #     tags_n_values = xml_parsed.get_tags_and_values(
+                #         attribute_usage, concat_on_key_error
+                #     )
+                # except KeyError as e:
+                #     # print(
+                #     #     f"ERROR: skipping document #{index} due to the following error: {e}"
+                #     # )
+                #     self.pm.log_error(
+                #         index,
+                #         f"ERROR: skipping document #{index} due to the following error: {e}",
+                #     )
+                #     # self.process_log.append(
+                #     #     f"ERROR: skipping document #{index} due to the following error: {e}"
+                #     # )
+                #     out = "error"
+                # else:
+                #     # append the new record to the list for the current document type
+                #     # and store/update the new list in the dict holding all document type lists
+                #     # doc_data.append(tags_n_values)
+                #     # self.doc_types[xml_parsed.type] = doc_data
+
+                #     # safe the parsed document to the database
+                #     self.pm.store_xml_parsed(index, tags_n_values, xml_parsed)
 
         # print(f"Size of doc store in MiB: {get_actualsizeof(self.doc_types)}")
+
+        # once all data is processed, commit the changes to the database
+        # Attention: this does does only work in pm2 and pm5
+        self.pm.commit_writes()
 
         # once all data is processed and stored, create the indices
         self.pm.create_indices(IndexGroup.PROCESS_LOG)
@@ -303,11 +354,14 @@ class FileProcessor:
             doc_type_stats = []
             for (
                 tag,
+                max_depth,
                 max_repets,
                 min_repets,
                 avg_Repets,
             ) in self.pm.get_single_xml_type_stats(xml_type):
-                doc_type_stats.append([tag, max_repets, min_repets, avg_Repets])
+                doc_type_stats.append(
+                    [tag, max_depth, max_repets, min_repets, avg_Repets]
+                )
             doc_types[xml_type] = {
                 "no_of_docs": no_of_docs,
                 "doc_type_stats": doc_type_stats,
@@ -331,11 +385,11 @@ class FileProcessor:
         return doc_data
 
     def info(self):
-        out = [
+        out = (
             f"File name: {self.file_name_root}",
             f"No of lines in file: {self.line_count}",
             f"No of valid documents in file: {self.no_of_docs_in_file}",
-        ]
+        )
         return out
 
     def debug_info(self):
@@ -349,7 +403,7 @@ class FileProcessor:
 
         return out
 
-    def get_process_log(self, log_level: LogLevel = None):
+    def get_process_log(self, log_level: LogLevel = None, doc_id: int = None):
 
         log_lvl = {
             0: "INFO",
@@ -360,12 +414,15 @@ class FileProcessor:
         if not log_level:
             log_level = LogLevel.ALL
 
-        for row in self.pm.get_process_log(log_level):
-            doc_id = row["DocID"]
-            log_lev = log_lvl[row["LogLevel"]]
-            log_entry = row["LogEntry"]
-            row_out = (doc_id, log_lev, log_entry)
-            yield row_out
+        if doc_id:
+            return self.pm.get_process_log(log_level, doc_id)
+        else:
+            for row in self.pm.get_process_log(log_level):
+                doc_id = row["DocID"]
+                log_lev = log_lvl[row["LogLevel"]]
+                log_entry = row["LogEntry"]
+                row_out = (doc_id, log_lev, log_entry)
+                yield row_out
 
     def get_xml_docs_valid(self):
 
@@ -374,7 +431,7 @@ class FileProcessor:
             yield row_out
 
     # @profile
-    def to_excel(self, out_path=None):
+    def to_excel(self, out_path=None, attrs_to_split_on=None):
         # create the output
         cnt_files = 0
 
@@ -382,12 +439,12 @@ class FileProcessor:
         timestamp = dt_now.strftime("%Y%m%d_%H%M%S")
 
         if out_path:
-            file_out_path = out_path + "/"
+            file_out_path = out_path
         else:
-            file_out_path = self._temp_path + "/"
+            file_out_path = self._data_path
 
         file_out_name = f"{self.file_name_root}_{timestamp}.xlsx"
-        file_out = file_out_path + file_out_name
+        file_out = os.path.join(file_out_path, file_out_name)
 
         # if we have output to produce, loop through the dict holding all document type lists
         # and create an Excel file for each output type
@@ -413,8 +470,25 @@ class FileProcessor:
                 worksheet = workbook.add_worksheet(name=doc_type[0:31])
             except:
                 pass
+
+            # debug...
+            # print(f"{datetime.now():%Y-%m-%d %H:%M:%S}: creating output for {doc_type}")
             # create the output table for each document type
-            self.pm.create_output_by_xml_type(doc_type)
+            if attrs_to_split_on:
+                # print(f"this is the data received from frontend: {attrs_to_split_on}")
+                if doc_type in attrs_to_split_on:
+                    create_record_on = set(attrs_to_split_on[doc_type])
+                    # print(
+                    #     f"passing on the following split on attrs for type {doc_type}: {create_record_on}"
+                    # )
+                    self.pm.create_output_by_xml_type(
+                        doc_type=doc_type, create_record_on=create_record_on
+                    )
+                else:
+                    self.pm.create_output_by_xml_type(doc_type=doc_type)
+            else:
+                self.pm.create_output_by_xml_type(doc_type=doc_type)
+
             # write the header to the output sheet
             header = (row["Tag"] for row in self.pm.get_xml_tags_by_type(doc_type))
             worksheet.write_row(0, 0, header)
@@ -426,6 +500,8 @@ class FileProcessor:
 
         # Saves the new document
         workbook.close()
+        self.generated_excel_name = file_out_name
+        self.generated_excel = True
         return file_out_name
 
     # ------------------
@@ -434,60 +510,175 @@ class FileProcessor:
     def _split_into_documents(self):
         out = True
 
+        print(f"Splitting File with delim: {self.re_split}")
+
         patts = set()
         idx_start = 0
 
-        # every regex has to be a single capturing group
-        num_groups = len(self.re_split) + 1
+        if not self.custom_separator:
 
-        # regex.split returns a list containing the resulting substrings.
-        # If capturing parentheses are used in pattern, then the text of all groups in the pattern are also returned as part of the resulting list.
-        # These groups are returned as elements *before* the actual resulting substring. I.e. if 4 capturing groups have been defined,
-        # 4 items representing matches of these groups will be returned and the actual substring itself will be returned as the 5th item in the list.
-        # the list can start with an empty string.
+            # every regex has to be a single capturing group
+            num_groups = len(self.re_split) + 1
 
-        list_raw = self.comp_re_split.split(self.file_content)
+            # check if the file contains any known delimiter
+            if (
+                not "<xml" in self.file_content.lower()
+                and not "<document" in self.file_content.lower()
+            ):
+                self.pm.log_error(
+                    0,
+                    "Error during splitting of document: None of the known delimiters <xml*> and/or <document*> found",
+                )
+                self.pm.commit_writes()
+                print("No delimiter found!!!")
+                out = False
+                return out
 
-        if list_raw[0] is not None:
-            if len(list_raw[0]) == 0:
-                # ignore 1st emptyp string
-                idx_start = 1
+            # regex.split returns a list containing the resulting substrings.
+            # If capturing parentheses are used in pattern, then the text of all groups in the pattern are also returned as part of the resulting list.
+            # These groups are returned as elements *before* the actual resulting substring. I.e. if 4 capturing groups have been defined,
+            # 4 items representing matches of these groups will be returned and the actual substring itself will be returned as the 5th item in the list.
+            # the list can start with an empty string.
 
-        doc_idx = 0
-        for idx, item in enumerate(list_raw[idx_start:], start=1):
-            if item:
-                if idx % num_groups == 0:
-                    # this is the actual content we want
-                    validation_result = self._validate_document(item)
-                    doc_idx += 1
-                    if validation_result.valid:
-                        # store the valid item
-                        # self.xml_source.append(item.strip())
-                        self.pm.store_doc(doc_idx, DocValidity.VALID, item.strip())
+            list_raw = self.comp_re_split.split(self.file_content)
+
+            if list_raw[0] is not None:
+                if len(list_raw[0]) == 0:
+                    # ignore 1st emptyp string
+                    idx_start = 1
+
+            docs_to_process = len(list_raw)
+            doc_idx = 0
+            for idx, item in enumerate(list_raw[idx_start:], start=1):
+
+                if idx % 20_000 == 0:
+                    # commit every 20'000 records
+                    self.pm.commit_writes()
+
+                progress_pct = round((idx * 100) / docs_to_process, 2)
+                if (progress_pct).is_integer():
+                    print(
+                        f"Processing split file is at {progress_pct:3.0f}%...", end="\r"
+                    )
+
+                # the actual processing
+                if item:
+                    if idx % num_groups == 0:
+                        # this is the actual content we want
+                        validation_result = self._validate_document(item)
+                        doc_idx += 1
+                        if validation_result.valid:
+                            # store the valid item
+                            # self.xml_source.append(item.strip())
+                            self.pm.store_doc(doc_idx, DocValidity.VALID, item.strip())
+                        else:
+                            out = False
+                            # store the invalid item
+                            # self.xml_source_invalid.append(
+                            #     {
+                            #         "Document": item.strip(),
+                            #         "Validation Result": validation_result.output,
+                            #     }
+                            # )
+                            self.pm.store_doc(
+                                doc_idx,
+                                DocValidity.INVALID,
+                                item.strip(),
+                                validation_result.output,
+                            )
                     else:
-                        out = False
-                        # store the invalid item
-                        # self.xml_source_invalid.append(
-                        #     {
-                        #         "Document": item.strip(),
-                        #         "Validation Result": validation_result.output,
-                        #     }
-                        # )
-                        self.pm.store_doc(
-                            doc_idx,
-                            DocValidity.INVALID,
-                            item.strip(),
-                            validation_result.output,
-                        )
-                else:
-                    patts.add(item)
+                        patts.add(item)
 
-        self.doc_delimiters = list(patts)
+            self.doc_delimiters = list(patts)
+
+        else:
+
+            # the custom delimiter has only one group, so add 1 + 1
+            num_groups = 2
+
+            if not self.comp_re_split.search(self.file_content):
+                self.pm.log_error(
+                    0,
+                    "Error during splitting of document: None of the known delimiters <xml*> and/or <document*> found",
+                )
+                print("No delimiter found!!!")
+                self.pm.commit_writes()
+                out = False
+                return out
+
+            # regex.split returns a list containing the resulting substrings.
+            # If capturing parentheses are used in pattern, then the text of all groups in the pattern are also returned as part of the resulting list.
+            # These groups are returned as elements *before* the actual resulting substring. I.e. if 4 capturing groups have been defined,
+            # 4 items representing matches of these groups will be returned and the actual substring itself will be returned as the 5th item in the list.
+            # the list can start with an empty string.
+
+            list_raw = self.comp_re_split.split(self.file_content)
+
+            if list_raw[0] is not None:
+                if len(list_raw[0]) == 0:
+                    # ignore 1st emptyp string
+                    idx_start = 1
+
+            docs_to_process = len(list_raw)
+            doc_idx = 0
+            for idx, item in enumerate(list_raw[idx_start:], start=1):
+
+                if idx % 20_000 == 0:
+                    # commit every 20'000 records
+                    self.pm.commit_writes()
+
+                progress_pct = round((idx * 100) / docs_to_process, 2)
+                if (progress_pct).is_integer():
+                    print(
+                        f"Processing split file is at {progress_pct:3.0f}%...", end="\r"
+                    )
+
+                # the actual processing
+                if item:
+                    if self.comp_re_split.fullmatch(item):
+                        # this is the delimiter
+                        patts.add(item)
+                    else:
+                        # this is the actual content we want
+                        validation_result = self._validate_document(item)
+                        doc_idx += 1
+                        if validation_result.valid:
+                            # store the valid item
+                            # self.xml_source.append(item.strip())
+                            self.pm.store_doc(doc_idx, DocValidity.VALID, item.strip())
+                        else:
+                            out = False
+                            # store the invalid item
+                            # self.xml_source_invalid.append(
+                            #     {
+                            #         "Document": item.strip(),
+                            #         "Validation Result": validation_result.output,
+                            #     }
+                            # )
+                            self.pm.store_doc(
+                                doc_idx,
+                                DocValidity.INVALID,
+                                item.strip(),
+                                validation_result.output,
+                            )
+
+            self.doc_delimiters = list(patts)
 
         # once all data is processed and stored, create the indices
+        self.pm.commit_writes()
         self.pm.create_indices(IndexGroup.DOC_STORE)
 
-        # print(self.xml_source_invalid)
+        if out == False:
+            self.pm.log_warning(
+                0,
+                "File successfully split into single documents with invalid docutments found.",
+            )
+        else:
+            self.pm.log_success(
+                0, "File successfully split into single documents without any errors."
+            )
+        self.pm.commit_writes()
+        # print(f"out={out}")
         return out
 
     # @profile
@@ -516,6 +707,7 @@ if __name__ == "__main__":
     from pprint import pprint
 
     path_name = "P:/Programming/Python/xml_examples/"
+    # file_name = "xml_test_data_small_no_prolog.xml"
     # file_name = "pain.008.sepa.duplicates_and_invalid.xml"
     file_name = "mixed.pain.camt.xml"
     # file_name = "camt.054_sweden.xml"

@@ -63,22 +63,101 @@
                     </div>
                 </div>
                 <div class="row" style="min-height: 400px;">
-                    <table class="table table-smallfont table-sm table-hover">
-                        <thead class="thead-light">
-                            <tr>
-                                <th scope="col">#</th>
-                                <th scope="col">Document</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for doc_id, xml_doc in fp.get_xml_docs_valid() %}
-                            <tr>
-                                <td>{{ doc_id }}</td>
-                                <td>{{ xml_doc }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+
+
+
+                    <div class="col-md-12 flex-grow-1">
+                        {% if fp.xml_split_noerror %}
+
+                        <table class="table table-smallfont table-sm table-hover">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th scope="col">#</th>
+                                    <th scope="col">Document</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc_id, xml_doc in fp.get_xml_docs_valid() %}
+                                <tr>
+                                    <td>{{ doc_id }}</td>
+                                    <td>{{ xml_doc }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+
+                        {% else %}
+
+                        {% set log_data = fp.get_process_log(doc_id=0) %}
+                        {% set log_lvl = log_data[1] %}
+                        {% set log_msg = log_data[2] %}
+
+                        {% if log_lvl == "ERROR" %}
+                        <div class="text-left">Document Content:</div>
+                        <!-- the document type level tabs -->
+                        <ul class="nav nav-tabs">
+                            <li class="nav-item">
+                                <a href="#valid" class="nav-link active" data-toggle="tab">Valid documents</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="#invalid" class="nav-link" data-toggle="tab">Invalid documents</a>
+                            </li>
+                        </ul>
+                        <!-- the 1st level tabs -->
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="valid">
+                                <p></p>
+                                <p>Valid documents in file:</p>
+                                <table class="table table-smallfont table-sm table-hover">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th scope="col">#</th>
+                                            <th scope="col">Document</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for doc_id, xml_doc in fp.get_xml_docs_valid() %}
+                                        <tr>
+                                            <td>{{ doc_id }}</td>
+                                            <td>{{ xml_doc }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="tab-pane fade" id="invalid">
+                                <p></p>
+                                <p>Valid documents in file:</p>
+                                <table class="table table-smallfont table-sm table-hover">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th scope="col">#</th>
+                                            <th scope="col">Document</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for doc_id, xml_doc in fp.get_xml_docs_invalid() %}
+                                        <tr>
+                                            <td>{{ doc_id }}</td>
+                                            <td>{{ xml_doc }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="text-left">{{log_msg}}</div>
+                        {% endif %}
+
+                        {% endif %}
+                    </div>
+
+
+
+
+
+
                 </div>
                 <div class="row justify-content-md-center pt-3">
                     <div class="col-md-6 text-center">

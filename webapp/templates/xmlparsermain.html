@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="content-section">
-    <form method="POST" action="">
+    <form method="POST" name="xmlmain" action="">
         {{ form.hidden_tag() }}
         <fieldset class="form-group">
             <legend class="border-bottom mb-4">XML Parser</legend>
@@ -94,10 +94,12 @@
 
                                     <div class="tab-pane fade show active" id="{{ sample }}stats">
                                         <p></p>
-                                        <table class="table table-mediumfont table-sm table-hover">
+                                        <table id="TagStatsTable{{sample}}" name="{{sample}}"
+                                            class="table table-mediumfont table-sm table-hover">
                                             <thead class="thead-light">
                                                 <tr>
                                                     <th scope="col">Tag</th>
+                                                    <th scope="col">Tree Depth</th>
                                                     <th scope="col">Max Repetitions</th>
                                                     <th scope="col">Min Repetitions</th>
                                                     <th scope="col">Avg Repetitions</th>
@@ -107,9 +109,10 @@
                                                 <!-- sample_data['tag_stats'] is a list, not a dict; 
                                                         hence loop through the list and not the items of a dict-->
                                                 {% set rows = sample_data['tag_stats']%}
-                                                {% for tag, max_rep, min_rep, avg_rep in rows%}
+                                                {% for tag, max_dep, max_rep, min_rep, avg_rep in rows%}
                                                 <tr>
                                                     <td>{{ tag }}</td>
+                                                    <td>{{ max_dep }}</td>
                                                     <td>{{ max_rep }}</td>
                                                     <td>{{ min_rep }}</td>
                                                     <td>{{ avg_rep }}</td>
@@ -121,7 +124,8 @@
 
                                     <div class="tab-pane fade" id="{{ sample }}data">
                                         <p></p>
-                                        <table class="table table-mediumfont table-sm table-hover">
+                                        <table id="SampleDocument{{sample}}" name="{{sample}}"
+                                            class="table table-mediumfont table-sm table-hover">
                                             <thead class="thead-light">
                                                 <tr>
                                                     <th scope="col">Tag</th>
@@ -150,7 +154,13 @@
                 {% if fp.file_processed %}
                 <div class="row justify-content-md-center pt-3">
                     <div class="col-md-6 text-center">
+                        {% if fp.generated_excel == False %}
                         {{ form.buildexcel(class="btn btn-outline-info") }}
+                        {{ form.downloadexcel(class="btn btn-outline-info", style="display:none") }}
+                        {% else %}
+                        {{ form.buildexcel(class="btn btn-outline-info", style="display:none") }}
+                        {{ form.downloadexcel(class="btn btn-outline-info") }}
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -159,3 +169,8 @@
     </form>
 </div>
 {% endblock content %}
+{% block scripts %}
+<!-- Page specific JavaScript sources-->
+<script src="{{url_for('static', filename='xmlparsermain-functions.js')}}"></script>
+<!-- End of page specific JavaScript sources-->
+{% endblock scripts %}

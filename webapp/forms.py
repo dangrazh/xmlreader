@@ -17,7 +17,22 @@ class XmlUploadForm(FlaskForm):
     sourcefile = FileField(
         "Upload source file", validators=[FileAllowed(["txt", "xml"])]
     )
-    btn_submit = SubmitField("Upload")
+    use_deffaut_separators = RadioField(
+        "Apply document delimiters:",
+        choices=[
+            (1, "Use standard delimiters  "),
+            (2, "Use custom delimiters  "),
+        ],
+        default=1,
+        coerce=int,
+        description="Standard delimiters are an <xml.*> and / or a <document.*> tag. If you have another document separator, plese click the 'Use custom delimiters' option.",
+    )
+    custom_separators = StringField(
+        "Custom separator",
+        description="Please specify your custom document delimiter as a Regulatory Expression.",
+    )
+
+    btn_submit = SubmitField("Upload & Split", id="uploadFile")
 
 
 class XmlSummaryForm(FlaskForm):
@@ -52,8 +67,9 @@ class XmlMainForm(FlaskForm):
         description="Specifies how many levels down the tree from top node the document type tag is located.",
         default=1,
     )
-    inspectfile = SubmitField("Process file")
-    buildexcel = SubmitField("Create Excel")
+    inspectfile = SubmitField("Process file", id="processFile")
+    buildexcel = SubmitField("Create Excel", id="createExcel")
+    downloadexcel = SubmitField("Download Excel", id="downloadExcel")
     summary = TextAreaField("File summary")
     output = TextAreaField("Inspect Result")
 
@@ -61,3 +77,7 @@ class XmlMainForm(FlaskForm):
         super(XmlMainForm, self).__init__(*args, **kwargs)
         read_only(self.summary)
         read_only(self.output)
+
+
+class AjaxTestForm(FlaskForm):
+    btn_ok = SubmitField("ok")
